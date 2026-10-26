@@ -49,7 +49,21 @@ class TestAccountService(TestCase):
     def tearDown(self):
         """Runs once after each test case"""
         db.session.remove()
+    def test_method_not_allowed(self):
+        """It should return 405 for an unsupported method"""
+        response = self.client.put("/")
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
+    def test_internal_server_error_handler(self):
+        """It should return 500 for an internal server error"""
+        from service.common.error_handlers import internal_server_error
+
+        response, code = internal_server_error(Exception("Test error"))
+        self.assertEqual(code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.get_json()["error"], "Internal Server Error")
     ######################################################################
     #  H E L P E R   M E T H O D S
     ######################################################################
@@ -124,3 +138,37 @@ class TestAccountService(TestCase):
         self.assertEqual(response.status_code, status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
 
     # ADD YOUR TEST CASES HERE ...
+    def test_read_an_account(self):
+        """It should Read an Account"""
+        # Create an account first
+        account = AccountFactory()
+        response = self.client.post(
+            BASE_URL,
+            json=account.serialize(),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Get the newly created account ID
+        new_account = response.get_json()
+        account_id = new_account["id"]
+
+        # Read the account
+        response = self.client.get(f"{BASE_URL}/{account_id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Verify the returned account data
+        data = response.get_json()
+        self.assertEqual(data["id"], account_id)
+        self.assertEqual(data["name"], account.name)
+        self.assertEqual(data["email"], account.email)
+        self.assertEqual(data["address"], account.address)
+        self.assertEqual(data["phone_number"], account.phone_number)
+    
+    def test_account_not_found(self):
+        """It should return 404 when an account is not found"""
+        response = self.client.get(f"{BASE_URL}/0")
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
